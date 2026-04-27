@@ -1,0 +1,184 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import pickle
+import os
+
+# Missing imports (FIXED)
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+
+# -----------------------------------
+# Streamlit Page Config
+# -----------------------------------
+st.set_page_config(
+    page_title="Investment Profit Predictor",
+    layout="wide"
+)
+
+st.title("📈 Investment Profit Prediction Dashboard")
+st.write("Predict company profit based on investment spending.")
+
+# -----------------------------------
+# File Paths
+# -----------------------------------
+DATA_FILE = "Investment.csv"
+MODEL_FILE = "investment_model.pkl"
+
+# -----------------------------------
+# Check dataset file
+# -----------------------------------
+if not os.path.exists(DATA_FILE):
+    st.error("Investment.csv file not found.")
+    st.stop()
+
+# -----------------------------------
+# Train Model Function
+# -----------------------------------
+def train_model():
+    df = pd.read_csv(DATA_FILE)
+
+    # Features
+    X = df.iloc[:, :-1]
+    y = df.iloc[:, -1]
+
+    # Handle categorical column
+    X = pd.get_dummies(X, drop_first=True)
+
+    # Train-test split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42
+    )
+
+    # Train model
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    # Prediction
+    y_pred = model.predict(X_test)
+
+    # Accuracy score
+    score = r2_score(y_test, y_pred)
+
+    # Save model
+    with open(MODEL_FILE, "wb") as f:
+        pickle.dump((model, X.columns.tolist(), score), f)
+
+    return model, X.columns.tolist(), score
+
+
+# -----------------------------------
+# Load Existing Model OR Train New
+# -----------------------------------
+try:
+    if os.path.exists(MODEL_FILE):
+        with open(MODEL_FILE, "rb") as f:
+            model, columns, score = pickle.load(f)
+    else:
+        model, columns, score = train_model()
+
+except:
+    model, columns, score = train_model()
+
+
+# -----------------------------------
+# Sidebar Inputs
+# -----------------------------------
+st.sidebar.header("Enter Investment Details")
+
+marketing = st.sidebar.number_input(
+    "Digital Marketing Spend",
+    min_value=0.0
+)
+
+promotion = st.sidebar.number_input(
+    "Promotion Spend",
+    min_value=0.0
+)
+
+research = st.sidebar.number_input(
+    "Research Spend",
+    min_value=0.0
+)
+
+state = st.sidebar.selectbox(
+    "Select State",
+    ["New York", "California", "Florida"]
+)
+
+# -----------------------------------
+# Input Data
+# -----------------------------------
+input_data = pd.DataFrame({
+    "Digital Marketing Spend": [marketing],
+    "Promotion Spend": [promotion],
+    "Research Spend": [research],
+    "State": [state]
+})
+
+# Encoding
+input_data = pd.get_dummies(input_data)
+
+# Add missing columns
+for col in columns:
+    if col not in input_data.columns:
+        input_data[col] = 0
+
+# Maintain order
+input_data = input_data[columns]
+
+# -----------------------------------
+# Prediction
+# -----------------------------------
+if st.button("Predict Profit"):
+    prediction = model.predict(input_data)[0]
+
+    st.success(f"Estimated Profit: ₹ {prediction:,.2f}")
+
+    if "history" not in st.session_state:
+        st.session_state.history = []
+
+    st.session_state.history.append({
+        "Marketing": marketing,
+        "Promotion": promotion,
+        "Research": research,
+        "State": state,
+        "Predicted Profit": prediction
+    })
+
+
+# -----------------------------------
+# Model Performance
+# -----------------------------------
+st.subheader("📊 Model Performance")
+st.write(f"Model R² Score: {score:.2f}")
+
+
+# -----------------------------------
+# Prediction History
+# -----------------------------------
+st.subheader("🕒 Prediction History")
+
+if "history" in st.session_state:
+    history_df = pd.DataFrame(st.session_state.history)
+    st.dataframe(history_df)
+else:
+    st.write("No predictions made yet.")
+
+
+# -----------------------------------
+# Footer
+# -----------------------------------
+st.markdown("---")
+st.write("Built with ❤️ using Python, Scikit-learn, Streamlit & GitHub")
+
+
+
+
+
+
+
